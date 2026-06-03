@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "Pea",
+    "slug": "pea-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1C1917"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.aifysolutions.pea",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Pea uses your microphone to capture voice notes hands-free.",
+        "NSSpeechRecognitionUsageDescription": "Pea uses speech recognition to transcribe your voice captures.",
+        "UIBackgroundModes": ["fetch", "remote-notification"]
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1C1917"
+      },
+      "package": "com.aifysolutions.pea",
+      "versionCode": 1,
+      "permissions": [
+        "RECORD_AUDIO",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE",
+        "POST_NOTIFICATIONS"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#1C1917",
+          "sounds": []
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "YOUR_EAS_PROJECT_ID"
+      }
+    }
+  }
+}
