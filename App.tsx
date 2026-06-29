@@ -129,13 +129,6 @@ const STORAGE_KEY = 'pea:data:v3';
 // FIX: Empty items map for new/reset users — no demo data pollution
 const EMPTY_ITEMS: ItemsMap = { buy: [], do: [], call: [], follow: [] };
 
-// FIX: Demo items only shown during onboarding preview, never saved
-const DEMO_ITEMS: ItemsMap = {
-  buy:    [{ id: 'd1', text: 'Milk and eggs',         done: false, time: 'Yesterday',    draft: null }],
-  do:     [{ id: 'd2', text: 'Sign permission slip',  done: false, time: 'This morning', draft: null }],
-  call:   [{ id: 'd3', text: 'Call Mom back',         done: false, time: 'Yesterday',    draft: null }],
-  follow: [{ id: 'd4', text: 'Follow up with doctor', done: false, time: '3 days ago',   draft: null }],
-};
 
 const GROCERY_WORDS = new Set([
   'apple','apples','orange','oranges','banana','bananas','grape','grapes',
@@ -231,6 +224,7 @@ Clean up text. Reply ONLY JSON: {"category":"do","cleaned":"Text here"}`,
         messages: [{ role: 'user', content: `"${text}"` }],
       }),
     });
+    if (!res.ok) return null;
     const d   = await res.json();
     const raw = d.content?.[0]?.text || '{}';
     return JSON.parse(raw.replace(/```json|```/g, '').trim());
@@ -323,6 +317,10 @@ function CaptureSheet({ visible, onClose, onSave }: CaptureSheetProps) {
   const [text,      setText]      = useState('');
   const [aiResult,  setAiResult]  = useState<{ category: CategoryKey; cleaned: string } | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+
+  useEffect(() => {
+    return () => { if (debRef.current) clearTimeout(debRef.current); };
+  }, []);
 
   useEffect(() => {
     if (visible) {
@@ -617,49 +615,53 @@ function HomeScreen({ data, onUpdate, onReset }: HomeScreenProps) {
       draft: null,
     };
 
-    const isNewDay = data.lastCountReset !== todayStr();
-
     // FIX: Functional update — always based on latest state
-    onUpdate(prev => ({
-      ...prev,
-      captureCount:   isNewDay ? 1 : (prev.captureCount || 0) + 1,
-      lastCountReset: todayStr(),
-      items: {
-        ...prev.items,
-        [category]: [newItem, ...prev.items[category]],
-      },
-    }));
+    onUpdate(prev => {
+      const isNewDay = prev.lastCountReset !== todayStr();
+      return {
+        ...prev,
+        captureCount:   isNewDay ? 1 : (prev.captureCount || 0) + 1,
+        lastCountReset: todayStr(),
+        items: {
+          ...prev.items,
+          [category]: [newItem, ...prev.items[category]],
+        },
+      };
+    });
 
     setSavingItem(false);
 
     // Claude fallback for ambiguous items (non-blocking)
+    const VALID_CATS = new Set<string>(['buy', 'do', 'call', 'follow']);
     const wasLocal = !!localClassify(text);
+    let effectiveCategory = category;
     if (!wasLocal) {
       const result = await callClassifyAPI(text, data.userName);
-      if (result && result.category !== category) {
+      if (result && VALID_CATS.has(result.category) && result.category !== category) {
+        effectiveCategory = result.category as CategoryKey;
         onUpdate(prev => ({
           ...prev,
           items: {
             ...prev.items,
             [category]:        prev.items[category].filter(i => i.id !== newItem.id),
-            [result.category]: [
+            [effectiveCategory]: [
               { ...newItem, text: result.cleaned },
-              ...prev.items[result.category as CategoryKey],
+              ...prev.items[effectiveCategory],
             ],
           },
         }));
       }
     }
 
-    // Draft for call/follow items (non-blocking)
-    if (['call', 'follow'].includes(category)) {
+    // Draft for call/follow items — use the effective (possibly reclassified) category
+    if (['call', 'follow'].includes(effectiveCategory)) {
       const draft = await generateDraft(text, data.userName);
       if (draft) {
         onUpdate(prev => ({
           ...prev,
           items: {
             ...prev.items,
-            [category]: prev.items[category].map(i =>
+            [effectiveCategory]: prev.items[effectiveCategory].map(i =>
               i.id === newItem.id ? { ...i, draft } : i
             ),
           },
