@@ -592,7 +592,7 @@ function HomeScreen({ data, onUpdate, onReset }: HomeScreenProps) {
     return () => sub.remove();
   }, [activeCategory]);
 
-  const activeCount = Object.values(data.items)
+  const activeCount = (Object.values(data.items) as Item[][])
     .reduce((n, arr) => n + arr.filter(i => !i.done).length, 0);
 
   // FIX: handleSave uses functional update pattern throughout
@@ -708,8 +708,8 @@ function HomeScreen({ data, onUpdate, onReset }: HomeScreenProps) {
   if (activeCategory) {
     const isAll = activeCategory === 'all';
     const displayItems = isAll
-      ? Object.entries(data.items).flatMap(([cat, arr]) =>
-          arr.map(i => ({ ...i, cat: cat as CategoryKey }))
+      ? (Object.entries(data.items) as [CategoryKey, Item[]][]).flatMap(([cat, arr]) =>
+          arr.map(i => ({ ...i, cat }))
         )
       : data.items[activeCategory as CategoryKey].map(i => ({
           ...i, cat: activeCategory as CategoryKey,
@@ -808,8 +808,8 @@ function HomeScreen({ data, onUpdate, onReset }: HomeScreenProps) {
   }
 
   // ── Home view ──
-  const briefItems = Object.entries(data.items)
-    .flatMap(([cat, arr]) => arr.filter(i => !i.done).map(i => ({ ...i, cat: cat as CategoryKey })))
+  const briefItems = (Object.entries(data.items) as [CategoryKey, Item[]][])
+    .flatMap(([cat, arr]) => arr.filter(i => !i.done).map(i => ({ ...i, cat })))
     .slice(0, 3);
 
   return (
@@ -1021,8 +1021,8 @@ export default function App() {
   });
   const [notifGranted, setNotifGranted] = useState(false);
 
-  const notifListener  = useRef<ReturnType<typeof Notifications.addNotificationReceivedListener>>();
-  const responseListener = useRef<ReturnType<typeof Notifications.addNotificationResponseReceivedListener>>();
+  const notifListener  = useRef<ReturnType<typeof Notifications.addNotificationReceivedListener> | undefined>(undefined);
+  const responseListener = useRef<ReturnType<typeof Notifications.addNotificationResponseReceivedListener> | undefined>(undefined);
 
   useEffect(() => {
     // Load saved data
