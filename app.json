@@ -19,7 +19,10 @@
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Pea uses your microphone to capture voice notes hands-free.",
         "NSSpeechRecognitionUsageDescription": "Pea uses speech recognition to transcribe your voice captures.",
-        "UIBackgroundModes": ["fetch", "remote-notification"]
+        "UIBackgroundModes": [
+          "fetch",
+          "remote-notification"
+        ]
       }
     },
     "android": {
@@ -45,11 +48,6 @@
           "sounds": []
         }
       ]
-    ],
-    "extra": {
-      "eas": {
-        "projectId": "YOUR_EAS_PROJECT_ID"
-      }
-    }
+    ]
   }
 }
