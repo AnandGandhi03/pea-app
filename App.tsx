@@ -14,9 +14,11 @@ import { CONFIG } from './src/constants';
 // ─── NOTIFICATIONS ────────────────────────────────────────────
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
+    shouldShowAlert:  true,
+    shouldShowBanner: true,
+    shouldShowList:   true,
+    shouldPlaySound:  true,
+    shouldSetBadge:   true,
   }),
 });
 
@@ -1021,7 +1023,7 @@ export default function App() {
   });
   const [notifGranted, setNotifGranted] = useState(false);
 
-  const notifListener  = useRef<ReturnType<typeof Notifications.addNotificationReceivedListener> | undefined>(undefined);
+  const notifListener    = useRef<ReturnType<typeof Notifications.addNotificationReceivedListener> | undefined>(undefined);
   const responseListener = useRef<ReturnType<typeof Notifications.addNotificationResponseReceivedListener> | undefined>(undefined);
 
   useEffect(() => {
@@ -1042,8 +1044,8 @@ export default function App() {
     responseListener.current = Notifications.addNotificationResponseReceivedListener(() => {});
 
     return () => {
-      if (notifListener.current)    Notifications.removeNotificationSubscription(notifListener.current);
-      if (responseListener.current) Notifications.removeNotificationSubscription(responseListener.current);
+      notifListener.current?.remove();
+      responseListener.current?.remove();
     };
   }, []);
 
