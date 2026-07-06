@@ -48,6 +48,12 @@
           "sounds": []
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "477bc9fc-8e29-4d86-87b6-9ea0a058957b"
+      }
+    },
+    "owner": "anandgandhi"
   }
 }
