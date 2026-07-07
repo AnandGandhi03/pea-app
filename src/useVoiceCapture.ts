@@ -3,38 +3,39 @@ import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
 import { File as ExpoFile } from 'expo-file-system';
 import { CONFIG } from './constants';
 
-export type VoiceState = 'idle' | 'recording' | 'transcribing' | 'error';
+export type MicState = 'idle' | 'requesting' | 'recording' | 'transcribing' | 'error';
 
 export interface UseVoiceCaptureResult {
-  voiceState:       VoiceState;
-  errorMsg:         string | null;
-  startRecording:   () => Promise<void>;
+  micState:          MicState;
+  errorMsg:          string | null;
+  startRecording:    () => Promise<void>;
   stopAndTranscribe: () => Promise<string | null>;
-  cancelRecording:  () => Promise<void>;
-  resetError:       () => void;
+  cancelRecording:   () => Promise<void>;
+  resetError:        () => void;
 }
 
 export function useVoiceCapture(): UseVoiceCaptureResult {
-  const [voiceState, setVoiceState] = useState<VoiceState>('idle');
-  const [errorMsg,   setErrorMsg]   = useState<string | null>(null);
+  const [micState, setMicState] = useState<MicState>('idle');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
 
   async function startRecording(): Promise<void> {
     try {
+      setMicState('requesting');
       const { status } = await Audio.requestPermissionsAsync();
       if (status !== 'granted') {
         setErrorMsg('Microphone access denied. You can type instead.');
-        setVoiceState('error');
+        setMicState('error');
         return;
       }
 
       await Audio.setAudioModeAsync({
-        allowsRecordingIOS:    true,
-        playsInSilentModeIOS:  true,
-        interruptionModeIOS:   InterruptionModeIOS.DoNotMix,
-        interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
-        shouldDuckAndroid:     true,
-        staysActiveInBackground: false,
+        allowsRecordingIOS:         true,
+        playsInSilentModeIOS:       true,
+        interruptionModeIOS:        InterruptionModeIOS.DoNotMix,
+        interruptionModeAndroid:    InterruptionModeAndroid.DoNotMix,
+        shouldDuckAndroid:          true,
+        staysActiveInBackground:    false,
         playThroughEarpieceAndroid: false,
       });
 
@@ -42,36 +43,36 @@ export function useVoiceCapture(): UseVoiceCaptureResult {
         Audio.RecordingOptionsPresets.HIGH_QUALITY,
       );
       recordingRef.current = recording;
-      setVoiceState('recording');
+      setMicState('recording');
     } catch {
       setErrorMsg('Could not start recording. You can type instead.');
-      setVoiceState('error');
+      setMicState('error');
     }
   }
 
   async function stopAndTranscribe(): Promise<string | null> {
     const recording = recordingRef.current;
-    if (!recording) { setVoiceState('idle'); return null; }
+    if (!recording) { setMicState('idle'); return null; }
 
     try {
-      setVoiceState('transcribing');
+      setMicState('transcribing');
       await recording.stopAndUnloadAsync();
       const uri = recording.getURI();
       recordingRef.current = null;
 
       await Audio.setAudioModeAsync({
-        allowsRecordingIOS:    false,
-        playsInSilentModeIOS:  false,
-        interruptionModeIOS:   InterruptionModeIOS.DuckOthers,
-        interruptionModeAndroid: InterruptionModeAndroid.DuckOthers,
-        shouldDuckAndroid:     true,
-        staysActiveInBackground: false,
+        allowsRecordingIOS:         false,
+        playsInSilentModeIOS:       false,
+        interruptionModeIOS:        InterruptionModeIOS.DuckOthers,
+        interruptionModeAndroid:    InterruptionModeAndroid.DuckOthers,
+        shouldDuckAndroid:          true,
+        staysActiveInBackground:    false,
         playThroughEarpieceAndroid: false,
       });
 
       if (!uri) {
         setErrorMsg('Recording failed. You can type instead.');
-        setVoiceState('error');
+        setMicState('error');
         return null;
       }
 
@@ -80,7 +81,7 @@ export function useVoiceCapture(): UseVoiceCaptureResult {
 
       if (!hasProxy) {
         setErrorMsg('Voice transcription requires the Vercel API. You can type instead.');
-        setVoiceState('error');
+        setMicState('error');
         return null;
       }
 
@@ -95,7 +96,7 @@ export function useVoiceCapture(): UseVoiceCaptureResult {
 
       if (!res.ok) {
         setErrorMsg('Transcription failed. You can type instead.');
-        setVoiceState('error');
+        setMicState('error');
         return null;
       }
 
@@ -104,25 +105,25 @@ export function useVoiceCapture(): UseVoiceCaptureResult {
 
       if (!text) {
         setErrorMsg("Didn't catch that. Try again or type below.");
-        setVoiceState('error');
+        setMicState('error');
         return null;
       }
 
-      setVoiceState('idle');
+      setMicState('idle');
       return text;
     } catch {
       recordingRef.current = null;
       await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        playsInSilentModeIOS: false,
-        interruptionModeIOS: InterruptionModeIOS.DuckOthers,
-        interruptionModeAndroid: InterruptionModeAndroid.DuckOthers,
-        shouldDuckAndroid: true,
-        staysActiveInBackground: false,
+        allowsRecordingIOS:         false,
+        playsInSilentModeIOS:       false,
+        interruptionModeIOS:        InterruptionModeIOS.DuckOthers,
+        interruptionModeAndroid:    InterruptionModeAndroid.DuckOthers,
+        shouldDuckAndroid:          true,
+        staysActiveInBackground:    false,
         playThroughEarpieceAndroid: false,
       }).catch(() => {});
       setErrorMsg('Transcription failed. You can type instead.');
-      setVoiceState('error');
+      setMicState('error');
       return null;
     }
   }
@@ -134,22 +135,22 @@ export function useVoiceCapture(): UseVoiceCaptureResult {
       recordingRef.current = null;
     }
     await Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      playsInSilentModeIOS: false,
-      interruptionModeIOS: InterruptionModeIOS.DuckOthers,
-      interruptionModeAndroid: InterruptionModeAndroid.DuckOthers,
-      shouldDuckAndroid: true,
-      staysActiveInBackground: false,
+      allowsRecordingIOS:         false,
+      playsInSilentModeIOS:       false,
+      interruptionModeIOS:        InterruptionModeIOS.DuckOthers,
+      interruptionModeAndroid:    InterruptionModeAndroid.DuckOthers,
+      shouldDuckAndroid:          true,
+      staysActiveInBackground:    false,
       playThroughEarpieceAndroid: false,
     }).catch(() => {});
-    setVoiceState('idle');
+    setMicState('idle');
     setErrorMsg(null);
   }
 
   function resetError(): void {
-    setVoiceState('idle');
+    setMicState('idle');
     setErrorMsg(null);
   }
 
-  return { voiceState, errorMsg, startRecording, stopAndTranscribe, cancelRecording, resetError };
+  return { micState, errorMsg, startRecording, stopAndTranscribe, cancelRecording, resetError };
 }
