@@ -41,6 +41,12 @@
     },
     "plugins": [
       [
+        "expo-av",
+        {
+          "microphonePermission": "Pea uses your microphone to capture voice notes hands-free."
+        }
+      ],
+      [
         "expo-notifications",
         {
           "icon": "./assets/icon.png",

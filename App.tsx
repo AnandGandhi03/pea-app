@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { CONFIG } from './src/constants';
+import { useVoiceCapture } from './src/useVoiceCapture';
 
 // ─── NOTIFICATIONS ────────────────────────────────────────────
 Notifications.setNotificationHandler({
@@ -313,30 +314,68 @@ interface CaptureSheetProps {
 function CaptureSheet({ visible, onClose, onSave }: CaptureSheetProps) {
   const insets    = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(700)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
   const inputRef  = useRef<TextInput>(null);
   const debRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [text,      setText]      = useState('');
-  const [aiResult,  setAiResult]  = useState<{ category: CategoryKey; cleaned: string } | null>(null);
-  const [aiLoading, setAiLoading] = useState(false);
+  const [mode,       setMode]       = useState<'voice' | 'type'>('voice');
+  const [text,       setText]       = useState('');
+  const [aiResult,   setAiResult]   = useState<{ category: CategoryKey; cleaned: string } | null>(null);
+  const [aiLoading,  setAiLoading]  = useState(false);
+  const [transcript, setTranscript] = useState<string | null>(null);
 
+  const { voiceState, errorMsg, startRecording, stopAndTranscribe, cancelRecording, resetError } =
+    useVoiceCapture();
+
+  // Cleanup debounce + recording on unmount
   useEffect(() => {
-    return () => { if (debRef.current) clearTimeout(debRef.current); };
+    return () => {
+      if (debRef.current) clearTimeout(debRef.current);
+      cancelRecording();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Animate sheet + reset state on visibility change
   useEffect(() => {
     if (visible) {
-      setText(''); setAiResult(null);
+      setMode('voice');
+      setText('');
+      setAiResult(null);
+      setTranscript(null);
+      resetError();
       Animated.spring(slideAnim, {
         toValue: 0, useNativeDriver: true, tension: 65, friction: 11,
       }).start();
-      setTimeout(() => inputRef.current?.focus(), 300);
     } else {
+      cancelRecording();
       Animated.timing(slideAnim, {
         toValue: 700, useNativeDriver: true, duration: 260,
       }).start();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
+
+  // Pulse animation while recording
+  useEffect(() => {
+    if (voiceState === 'recording') {
+      const anim = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, { toValue: 1.15, duration: 600, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1,    duration: 600, useNativeDriver: true }),
+        ])
+      );
+      anim.start();
+      return () => { anim.stop(); pulseAnim.setValue(1); };
+    } else {
+      pulseAnim.setValue(1);
+    }
+  }, [voiceState]);
+
+  // Auto-focus text input when switching to type mode
+  useEffect(() => {
+    if (mode === 'type') setTimeout(() => inputRef.current?.focus(), 300);
+  }, [mode]);
 
   function triggerAI(val: string) {
     if (debRef.current) clearTimeout(debRef.current);
@@ -350,7 +389,7 @@ function CaptureSheet({ visible, onClose, onSave }: CaptureSheetProps) {
   }
 
   function handleSave() {
-    const t = text.trim();
+    const t = (transcript || text).trim();
     if (!t) return;
     Keyboard.dismiss();
     const r = aiResult || localClassify(t) || { category: 'do' as CategoryKey, cleaned: cap(t) };
@@ -360,10 +399,61 @@ function CaptureSheet({ visible, onClose, onSave }: CaptureSheetProps) {
 
   function handleClose() {
     Keyboard.dismiss();
+    cancelRecording();
     onClose();
   }
 
-  const cat = aiResult?.category ? CATS[aiResult.category] : null;
+  async function handleMicPress() {
+    if (voiceState === 'recording') {
+      const result = await stopAndTranscribe();
+      if (result) {
+        setTranscript(result);
+        triggerAI(result);
+      }
+    } else {
+      resetError();
+      await startRecording();
+    }
+  }
+
+  function switchToType(prefill = '') {
+    setTranscript(null);
+    setText(prefill);
+    if (prefill) triggerAI(prefill);
+    setMode('type');
+  }
+
+  function switchToVoice() {
+    setTranscript(null);
+    setText('');
+    setAiResult(null);
+    resetError();
+    setMode('voice');
+  }
+
+  const cat          = aiResult?.category ? CATS[aiResult.category] : null;
+  const isRecording  = voiceState === 'recording';
+  const isWorking    = voiceState === 'transcribing';
+  const hasTranscript = !!transcript && voiceState === 'idle';
+
+  const aiPill = (
+    <View style={cs.aiStatus}>
+      {aiLoading && (
+        <View style={cs.pill}>
+          <ActivityIndicator size="small" color={C.orange} style={{ marginRight: 6 }} />
+          <Text style={cs.pillText}>Pea is thinking...</Text>
+        </View>
+      )}
+      {!aiLoading && cat && (
+        <View style={cs.pill}>
+          <View style={[cs.dot, { backgroundColor: cat.color }]} />
+          <Text style={cs.pillText} numberOfLines={1}>
+            {cat.label} · "{aiResult?.cleaned}"
+          </Text>
+        </View>
+      )}
+    </View>
+  );
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={handleClose}>
@@ -379,53 +469,112 @@ function CaptureSheet({ visible, onClose, onSave }: CaptureSheetProps) {
         }]}>
           <View style={cs.handle} />
 
+          {/* Header */}
           <View style={cs.sheetTop}>
             <Text style={cs.title}>What to remember?</Text>
-            <View style={cs.aiBadge}>
-              <Text style={cs.aiBadgeText}>✦ Pea AI</Text>
-            </View>
-          </View>
-          <Text style={cs.sub}>Type below — Pea sorts it automatically</Text>
-
-          <TextInput
-            ref={inputRef}
-            style={cs.input}
-            placeholder={`"Buy oat milk" or "Call the school"`}
-            placeholderTextColor={C.inkFaint}
-            value={text}
-            onChangeText={v => { setText(v); triggerAI(v); }}
-            multiline
-            returnKeyType="done"
-            blurOnSubmit
-            onSubmitEditing={handleSave}
-          />
-
-          {/* AI classification preview */}
-          <View style={cs.aiStatus}>
-            {aiLoading && (
-              <View style={cs.pill}>
-                <ActivityIndicator size="small" color={C.orange} style={{ marginRight: 6 }} />
-                <Text style={cs.pillText}>Pea is thinking...</Text>
-              </View>
-            )}
-            {!aiLoading && cat && (
-              <View style={cs.pill}>
-                <View style={[cs.dot, { backgroundColor: cat.color }]} />
-                <Text style={cs.pillText} numberOfLines={1}>
-                  {cat.label} · "{aiResult?.cleaned}"
-                </Text>
-              </View>
-            )}
+            <View style={cs.aiBadge}><Text style={cs.aiBadgeText}>✦ Pea AI</Text></View>
           </View>
 
-          <TouchableOpacity
-            style={[cs.saveBtn, !text.trim() && cs.saveBtnOff]}
-            onPress={handleSave}
-            disabled={!text.trim()}
-            activeOpacity={0.85}
-          >
-            <Text style={cs.saveBtnText}>Save to Pea</Text>
-          </TouchableOpacity>
+          {mode === 'type' ? (
+            /* ─── TYPE MODE ─── */
+            <>
+              <Text style={cs.sub}>Type below — Pea sorts it automatically</Text>
+              <TextInput
+                ref={inputRef}
+                style={cs.input}
+                placeholder={`"Buy oat milk" or "Call the school"`}
+                placeholderTextColor={C.inkFaint}
+                value={text}
+                onChangeText={v => { setText(v); triggerAI(v); }}
+                multiline
+                returnKeyType="done"
+                blurOnSubmit
+                onSubmitEditing={handleSave}
+              />
+              {aiPill}
+              <TouchableOpacity
+                style={[cs.saveBtn, !text.trim() && cs.saveBtnOff]}
+                onPress={handleSave}
+                disabled={!text.trim()}
+                activeOpacity={0.85}
+              >
+                <Text style={cs.saveBtnText}>Save to Pea</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={cs.modeLink} onPress={switchToVoice} activeOpacity={0.7}>
+                <Text style={cs.modeLinkTxt}>🎙 Back to voice</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            /* ─── VOICE MODE ─── */
+            <>
+              {/* Transcript result shown after successful transcription */}
+              {hasTranscript && (
+                <>
+                  <View style={cs.transcriptBox}>
+                    <Text style={cs.transcriptTxt}>{transcript}</Text>
+                    <TouchableOpacity
+                      onPress={() => switchToType(transcript!)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={cs.editLink}>Edit</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {aiPill}
+                  <TouchableOpacity style={cs.saveBtn} onPress={handleSave} activeOpacity={0.85}>
+                    <Text style={cs.saveBtnText}>Save to Pea</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+
+              {/* Mic button area (shown while idle/recording/transcribing/error) */}
+              {!hasTranscript && (
+                <>
+                  {voiceState === 'error' && errorMsg && (
+                    <View style={cs.errBanner}>
+                      <Text style={cs.errTxt}>{errorMsg}</Text>
+                    </View>
+                  )}
+                  <View style={cs.micArea}>
+                    <TouchableOpacity
+                      onPress={handleMicPress}
+                      disabled={isWorking}
+                      activeOpacity={0.85}
+                    >
+                      <Animated.View style={[
+                        cs.micBtn,
+                        isRecording && cs.micBtnRec,
+                        { transform: [{ scale: pulseAnim }] },
+                      ]}>
+                        {isWorking
+                          ? <ActivityIndicator size="large" color="#fff" />
+                          : <Text style={cs.micIcon}>{isRecording ? '⏹' : '🎙'}</Text>
+                        }
+                      </Animated.View>
+                    </TouchableOpacity>
+                    <Text style={cs.micLabel}>
+                      {isWorking    ? 'Pea is transcribing…'
+                      : isRecording ? 'Listening… tap to finish'
+                      : voiceState === 'error' ? 'Tap to try again'
+                      : 'Tap and speak'}
+                    </Text>
+                  </View>
+                </>
+              )}
+
+              {/* Type instead / edit-as-text fallback (hidden while mic is active) */}
+              {!isRecording && !isWorking && (
+                <TouchableOpacity
+                  style={cs.modeLink}
+                  onPress={() => switchToType(hasTranscript ? transcript! : '')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={cs.modeLinkTxt}>
+                    {hasTranscript ? '⌨️ Edit as text' : '⌨️ Type instead'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </>
+          )}
         </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
@@ -433,23 +582,40 @@ function CaptureSheet({ visible, onClose, onSave }: CaptureSheetProps) {
 }
 
 const cs = StyleSheet.create({
-  backdrop:    { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(28,25,23,0.55)' },
-  kav:         { flex: 1, justifyContent: 'flex-end' },
-  sheet:       { backgroundColor: C.warmWhite, borderTopLeftRadius: 34, borderTopRightRadius: 34, padding: 24 },
-  handle:      { width: 40, height: 4, backgroundColor: '#D9D3CB', borderRadius: 2, alignSelf: 'center', marginBottom: 22 },
-  sheetTop:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
-  title:       { fontSize: 24, fontWeight: '300', color: C.ink, letterSpacing: -0.5 },
-  aiBadge:     { backgroundColor: C.greenSoft, borderRadius: 100, paddingHorizontal: 10, paddingVertical: 4 },
-  aiBadgeText: { fontSize: 11, color: C.greenDark, fontWeight: '600' },
-  sub:         { fontSize: 13, color: C.inkLight, marginBottom: 16 },
-  input:       { backgroundColor: C.cream, borderRadius: 20, padding: 15, fontSize: 17, color: C.ink, minHeight: 82, textAlignVertical: 'top', lineHeight: 24 },
-  aiStatus:    { minHeight: 38, justifyContent: 'center', marginTop: 10, marginBottom: 4 },
-  pill:        { flexDirection: 'row', alignItems: 'center', backgroundColor: C.cream, borderRadius: 100, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'flex-start', maxWidth: '100%' },
-  dot:         { width: 8, height: 8, borderRadius: 4, marginRight: 7, flexShrink: 0 },
-  pillText:    { fontSize: 12, color: C.inkLight, flexShrink: 1 },
-  saveBtn:     { backgroundColor: C.ink, borderRadius: 18, padding: 18, alignItems: 'center', marginTop: 8 },
-  saveBtnOff:  { opacity: 0.25 },
-  saveBtnText: { fontSize: 15, color: '#fff', fontWeight: '600' },
+  // ── Sheet chrome ──
+  backdrop:      { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(28,25,23,0.55)' },
+  kav:           { flex: 1, justifyContent: 'flex-end' },
+  sheet:         { backgroundColor: C.warmWhite, borderTopLeftRadius: 34, borderTopRightRadius: 34, padding: 24 },
+  handle:        { width: 40, height: 4, backgroundColor: '#D9D3CB', borderRadius: 2, alignSelf: 'center', marginBottom: 22 },
+  sheetTop:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+  title:         { fontSize: 24, fontWeight: '300', color: C.ink, letterSpacing: -0.5 },
+  aiBadge:       { backgroundColor: C.greenSoft, borderRadius: 100, paddingHorizontal: 10, paddingVertical: 4 },
+  aiBadgeText:   { fontSize: 11, color: C.greenDark, fontWeight: '600' },
+  // ── Type mode ──
+  sub:           { fontSize: 13, color: C.inkLight, marginBottom: 16 },
+  input:         { backgroundColor: C.cream, borderRadius: 20, padding: 15, fontSize: 17, color: C.ink, minHeight: 82, textAlignVertical: 'top', lineHeight: 24 },
+  // ── AI pill ──
+  aiStatus:      { minHeight: 38, justifyContent: 'center', marginTop: 10, marginBottom: 4 },
+  pill:          { flexDirection: 'row', alignItems: 'center', backgroundColor: C.cream, borderRadius: 100, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'flex-start', maxWidth: '100%' },
+  dot:           { width: 8, height: 8, borderRadius: 4, marginRight: 7, flexShrink: 0 },
+  pillText:      { fontSize: 12, color: C.inkLight, flexShrink: 1 },
+  // ── Save button ──
+  saveBtn:       { backgroundColor: C.ink, borderRadius: 18, padding: 18, alignItems: 'center', marginTop: 8 },
+  saveBtnOff:    { opacity: 0.25 },
+  saveBtnText:   { fontSize: 15, color: '#fff', fontWeight: '600' },
+  // ── Voice mode ──
+  micArea:       { alignItems: 'center', paddingVertical: 32 },
+  micBtn:        { width: 96, height: 96, borderRadius: 48, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.18, shadowRadius: 12, elevation: 8 },
+  micBtnRec:     { backgroundColor: C.orange },
+  micIcon:       { fontSize: 36 },
+  micLabel:      { marginTop: 16, fontSize: 15, color: C.inkLight, textAlign: 'center' },
+  transcriptBox: { backgroundColor: C.cream, borderRadius: 20, padding: 16, marginTop: 12, flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  transcriptTxt: { flex: 1, fontSize: 16, color: C.ink, fontWeight: '300', lineHeight: 24 },
+  editLink:      { fontSize: 13, color: C.blue, fontWeight: '600', paddingTop: 2 },
+  errBanner:     { backgroundColor: C.orangeSoft, borderRadius: 14, padding: 12, marginTop: 8, marginBottom: 4 },
+  errTxt:        { fontSize: 13, color: C.orange, fontWeight: '500', textAlign: 'center' },
+  modeLink:      { alignItems: 'center', paddingVertical: 14 },
+  modeLinkTxt:   { fontSize: 13, color: C.inkLight },
 });
 
 // ─── ONBOARDING ──────────────────────────────────────────────
