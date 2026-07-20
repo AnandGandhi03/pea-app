@@ -9,8 +9,16 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { text, userName, mode } = req.body;
-  if (!text) return res.status(400).json({ error: 'Missing text' });
+  const { text, userName, mode } = req.body || {};
+  if (typeof text !== 'string' || !text.trim()) {
+    return res.status(400).json({ error: 'Missing text' });
+  }
+  if (text.length > 1000) {
+    return res.status(400).json({ error: 'Text too long' });
+  }
+  if (userName !== undefined && (typeof userName !== 'string' || userName.length > 100)) {
+    return res.status(400).json({ error: 'Invalid userName' });
+  }
 
   // DRAFT mode — generates a ready-to-send message
   if (mode === 'draft') {
@@ -37,7 +45,7 @@ Keep it 2-3 sentences max. Sign off with their first name if provided.`,
       const data = await response.json();
       const draft = data?.content?.[0]?.text?.trim() || null;
       return res.status(200).json({ draft });
-    } catch (error) {
+    } catch {
       return res.status(500).json({ error: 'Draft generation failed' });
     }
   }

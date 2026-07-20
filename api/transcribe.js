@@ -8,8 +8,17 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { audioBase64, mimeType } = req.body;
-  if (!audioBase64) return res.status(400).json({ error: 'Missing audioBase64' });
+  const { audioBase64, mimeType } = req.body || {};
+  if (typeof audioBase64 !== 'string' || !audioBase64) {
+    return res.status(400).json({ error: 'Missing audioBase64' });
+  }
+  // ~15 MB of base64 ≈ 11 MB of audio — far above any hold-to-speak capture
+  if (audioBase64.length > 15_000_000) {
+    return res.status(413).json({ error: 'Audio too large' });
+  }
+  if (mimeType !== undefined && (typeof mimeType !== 'string' || !/^audio\/[\w.+-]+$/.test(mimeType))) {
+    return res.status(400).json({ error: 'Invalid mimeType' });
+  }
 
   try {
     const audioBuffer = Buffer.from(audioBase64, 'base64');
