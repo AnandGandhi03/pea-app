@@ -18,7 +18,6 @@
       "buildNumber": "1",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Pea uses your microphone to capture voice notes hands-free.",
-        "NSSpeechRecognitionUsageDescription": "Pea uses speech recognition to transcribe your voice captures.",
         "UIBackgroundModes": [
           "fetch",
           "remote-notification"
@@ -50,7 +49,7 @@
         "expo-notifications",
         {
           "icon": "./assets/icon.png",
-          "color": "#1C1917",
+          "color": "#4a7c59",
           "sounds": []
         }
       ]

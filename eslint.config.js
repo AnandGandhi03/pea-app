@@ -6,6 +6,23 @@ module.exports = [
     ignores: ['node_modules/**', '.expo/**', 'dist/**'],
   },
   {
+    // Jest globals for test files and setup.
+    files: ['**/__tests__/**/*.ts', 'jest.setup.js'],
+    languageOptions: {
+      globals: {
+        jest: 'readonly',
+        describe: 'readonly',
+        it: 'readonly',
+        expect: 'readonly',
+        beforeAll: 'readonly',
+        afterAll: 'readonly',
+        beforeEach: 'readonly',
+        afterEach: 'readonly',
+        require: 'readonly',
+      },
+    },
+  },
+  {
     rules: {
       // React Native's Animated API requires holding Animated.Value instances
       // during render (`useRef(new Animated.Value()).current`) — the React

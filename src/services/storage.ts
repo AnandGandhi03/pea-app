@@ -19,7 +19,8 @@ export function emptyData(): AppData {
 
 // Migrates any stored payload (including pre-schemaVersion data whose items
 // used a static `time` string instead of `createdAt`) to the current shape.
-function migrate(raw: any): AppData | null {
+// Exported for unit testing.
+export function migrate(raw: any): AppData | null {
   if (!raw || typeof raw !== 'object') return null;
 
   const items: ItemsMap = { buy: [], do: [], call: [], follow: [] };

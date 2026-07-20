@@ -1,7 +1,7 @@
 # Pea v1.0.0 — Release Checklist
 
 ## PHASE 1: Repo & Code ✅
-- [x] `src/constants.ts` present with CONFIG object
+- [x] Config from `EXPO_PUBLIC_PEA_API_URL` env var (`src/config.ts`) — no secrets in source
 - [x] `assets/icon.png` (1024×1024)
 - [x] `assets/adaptive-icon.png` (1024×1024)
 - [x] `assets/splash.png` (1080×1920)
@@ -13,14 +13,16 @@
 - [x] `app.json` — placeholder projectId removed
 - [x] `eas.json` — `production` profile (APK) present
 - [x] `eas.json` — `production-aab` profile (AAB/Play Store) present
-- [x] `api/classify.js` — uses `module.exports` (Vercel compatible)
-- [x] `App.tsx` — storage key `pea:data:v3`
-- [x] `App.tsx` — `EMPTY_ITEMS` (no demo data on fresh install)
-- [x] `App.tsx` — `setNotificationChannelAsync` (Android notifications)
-- [x] `App.tsx` — `BackHandler` (Android back button)
-- [x] TypeScript — zero type errors (`npx tsc --noEmit`)
-- [x] `pea-app.zip` removed from repo
-- [x] `package.json` — `main` field corrected to `node_modules/expo/AppEntry.js`
+- [x] `api/classify.js` — uses `module.exports` (Vercel compatible), input validated
+- [x] Storage key `pea:data:v3` with schema-versioned migration
+- [x] `EMPTY_ITEMS` (no demo data on fresh install)
+- [x] `setNotificationChannelAsync` (Android notifications)
+- [x] `BackHandler` (Android back button)
+- [x] `ErrorBoundary` wraps the app (calm crash recovery)
+- [x] TypeScript — zero errors (`npm run typecheck`)
+- [x] ESLint — zero errors (`npm run lint`)
+- [x] Unit tests pass (`npm test`)
+- [x] `package.json` — `main` field is `node_modules/expo/AppEntry.js`
 
 ## PHASE 2: EAS Setup
 - [ ] `eas whoami` — logged in as correct account
@@ -45,11 +47,13 @@
 
 ## PHASE 5: Backend / API
 - [ ] Vercel project created
-- [ ] `api/classify.js` deployed to Vercel
+- [ ] `api/classify.js` + `api/transcribe.js` deployed to Vercel
 - [ ] `ANTHROPIC_API_KEY` set in Vercel environment variables
-- [ ] `ANTHROPIC_API_URL` updated in `src/constants.ts` with real Vercel URL
+- [ ] `OPENAI_API_KEY` set in Vercel environment variables (Whisper transcription)
+- [ ] `EXPO_PUBLIC_PEA_API_URL` set as an EAS production env var (`eas env:create`)
 - [ ] Classify endpoint tested: `curl -X POST https://YOUR_URL/api/classify -H 'Content-Type: application/json' -d '{"text":"buy milk","userName":"Test"}'`
-- [ ] Draft endpoint tested
+- [ ] Draft endpoint tested (`{"text":"...","userName":"...","mode":"draft"}`)
+- [ ] Transcribe endpoint reachable
 
 ## PHASE 6: App Store Submission (iOS)
 - [ ] App Store Connect — new app created (`com.aifysolutions.pea`)
@@ -77,4 +81,4 @@
 - [ ] Monitor crash reports in Expo dashboard
 - [ ] Reply to first App Store reviews within 24h
 - [ ] Set up analytics (optional)
-- [ ] Plan v1.1.0 (voice input, widget, iCloud sync)
+- [ ] Plan v1.1.0 (Supabase auth + cross-device sync, family sharing, AI chat)

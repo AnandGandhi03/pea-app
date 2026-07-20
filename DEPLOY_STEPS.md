@@ -1,149 +1,120 @@
-# 🌿 Pea — Final Production Deploy Guide
-# All 10 bugs fixed. Follow these steps exactly.
+# 🌿 Pea — Production Deploy Guide
 
-═══════════════════════════════════════════════════════
-STEP 1 — UPLOAD TO GITHUB (5 min)
-═══════════════════════════════════════════════════════
+Local-first launch. The app runs fully on-device; the Vercel API adds AI
+reclassification, drafts, and voice transcription. If the API URL is unset the
+app degrades gracefully (on-device classification still works).
 
-1. Open github.com/AnandGandhi03/pea-app
-2. Delete all existing files in the repo
-3. Drag all files from this ZIP into the repo root
-4. Commit: "v1.0 — final production build"
+Current working branch: `claude/pea-app-bug-fixes-3q3wbj`
 
-═══════════════════════════════════════════════════════
-STEP 2 — DEPLOY API PROXY TO VERCEL (5 min)
-═══════════════════════════════════════════════════════
+---
 
-This is required — keeps your API key off the device (App Store rule).
+## Prerequisites
 
-1. Go to vercel.com → "Add New Project"
-2. Import from GitHub → select pea-app
-3. Click "Deploy" (Vercel auto-detects the config)
-4. Go to Project Settings → Environment Variables → Add:
-   Name:  ANTHROPIC_API_KEY
-   Value: your key from console.anthropic.com
-5. Click "Redeploy" after adding the key
-6. Copy your URL: https://pea-app-XXXX.vercel.app
+| Item | Cost | Notes |
+| --- | --- | --- |
+| Expo account | Free | expo.dev — EAS build (30 free builds/mo) |
+| Apple Developer | $99/yr | For App Store |
+| Google Play Console | $25 once | For Play Store |
+| Vercel | Free | Hosts the AI proxy (`api/`) |
+| Anthropic API key | ~$0.001/capture | console.anthropic.com |
+| OpenAI API key | Whisper usage | platform.openai.com (voice transcription) |
 
-7. Open src/constants.ts and update:
-   ANTHROPIC_API_URL: 'https://pea-app-XXXX.vercel.app/api/classify'
+---
 
-8. Commit the constants.ts change to GitHub
+## Step 1 — Deploy the AI proxy to Vercel
 
-═══════════════════════════════════════════════════════
-STEP 3 — OPEN CODESPACES (2 min)
-═══════════════════════════════════════════════════════
+Keeps API keys off the device (App Store requirement). The `api/` folder and
+`vercel.json` are already in the repo.
 
-1. Open github.com/AnandGandhi03/pea-app
-2. Click green "Code" button → Codespaces → "Create codespace on main"
-3. Wait for it to load (~90 seconds)
+1. vercel.com → **Add New Project** → import `AnandGandhi03/pea-app`.
+2. Deploy (Vercel auto-detects the serverless functions).
+3. Project Settings → **Environment Variables** → add:
+   - `ANTHROPIC_API_KEY` — from console.anthropic.com (classification + drafts)
+   - `OPENAI_API_KEY` — from platform.openai.com (Whisper transcription)
+4. **Redeploy** so the keys take effect.
+5. Copy the deployment URL, e.g. `https://pea-app-xxxx.vercel.app`.
 
-═══════════════════════════════════════════════════════
-STEP 4 — INSTALL & CONFIGURE EAS (10 min)
-═══════════════════════════════════════════════════════
+Endpoints exposed: `/api/classify` (also handles `mode: "draft"`) and
+`/api/transcribe`.
 
-Run these commands one by one in the Codespaces terminal:
+---
 
-  npm install
+## Step 2 — Point the app at your API
 
-  npm install -g eas-cli
+The app reads the base URL from the `EXPO_PUBLIC_PEA_API_URL` environment
+variable (no trailing slash). There is no hardcoded URL in the source.
 
-  eas login
-  # Enter your Expo account (create free at expo.dev if needed)
+**For local development** — create `.env` (copy from `.env.example`):
 
-  eas init
-  # This creates your EAS project and updates app.json
-  # Commit after: git add . && git commit -m "eas init" && git push
+```
+EXPO_PUBLIC_PEA_API_URL=https://pea-app-xxxx.vercel.app
+```
 
-═══════════════════════════════════════════════════════
-STEP 5 — BUILD FOR IOS (20 min, runs in cloud)
-═══════════════════════════════════════════════════════
+**For release builds** — set it as an EAS environment variable so it is baked
+into the build:
 
-Requirements: Apple Developer account ($99/yr) — you have this ✅
+```bash
+eas env:create --name EXPO_PUBLIC_PEA_API_URL \
+  --value https://pea-app-xxxx.vercel.app \
+  --environment production --visibility plaintext
+```
 
-  eas build --platform ios --profile production
+(Leave it unset to ship a local-only build — voice and AI enrichment are
+disabled, on-device capture still works.)
 
-EAS will ask for:
-  - Apple ID email
-  - Password (or App-Specific Password from appleid.apple.com)
-  - It handles signing certificates automatically
+---
 
-Build runs in Expo's cloud — no Xcode needed.
-You'll get an email when done. Download the .ipa file.
+## Step 3 — Build with EAS (run from your Codespace or local machine)
 
-═══════════════════════════════════════════════════════
-STEP 6 — BUILD FOR ANDROID (15 min)
-═══════════════════════════════════════════════════════
+> The cloud review environment cannot reach expo.dev; run these where you are
+> logged into EAS.
 
-For Google Play Store (AAB format):
-  eas build --platform android --profile production-aab
+```bash
+git pull origin claude/pea-app-bug-fixes-3q3wbj
+npm install
+npm install -g eas-cli
+eas login
+eas init          # first time only; commit the generated projectId in app.json
 
-For direct APK install (beta testing):
-  eas build --platform android --profile production
+# Android APK (sideload / internal testing)
+eas build --platform android --profile production
 
-No Android Studio needed. EAS handles everything.
+# Android AAB (Play Store)
+eas build --platform android --profile production-aab
 
-═══════════════════════════════════════════════════════
-STEP 7 — SUBMIT TO APP STORE
-═══════════════════════════════════════════════════════
+# iOS (App Store) — needs your Apple Developer account
+eas build --platform ios --profile production
+```
 
-Option A — Auto submit via EAS:
-  1. Fill in eas.json submit section with your Apple credentials
-  2. Run: eas submit --platform ios
+Answer **Y** if prompted to generate a keystore (EAS manages it).
 
-Option B — Manual (easier first time):
-  1. Download Transporter app from Mac App Store (free)
-  2. Drag the .ipa file into Transporter → Upload
-  3. Go to appstoreconnect.apple.com
-  4. My Apps → + New App:
-     Bundle ID:  com.aifysolutions.pea
-     Name:       Pea
-     SKU:        pea-app-001
-     Language:   English
-  5. Fill in:
-     - Description: "Pea is a voice-first family assistant for busy parents.
-       Speak anything in seconds — Pea categorizes, drafts your next step,
-       and sends a morning brief of everything waiting for you."
-     - Category: Productivity
-     - Privacy Policy URL: create free at app-privacy-policy-generator.firebaseapp.com
-     - Screenshots: use a real device or Simulator (iOS 17 required)
-  6. Select your build → Submit for Review
-  7. Review takes 1–3 business days
+---
 
-═══════════════════════════════════════════════════════
-STEP 8 — SUBMIT TO GOOGLE PLAY
-═══════════════════════════════════════════════════════
+## Step 4 — Submit
 
-1. Go to play.google.com/console ($25 one-time fee)
-2. Create account → Create app
-3. Package: com.aifysolutions.pea
-4. Upload the .aab file (from Step 6) → Internal testing track first
-5. Fill in store listing:
-   - Short description: "Voice-first family assistant for busy parents"
-   - Full description: same as App Store description above
-   - Category: Productivity
-   - Content rating: Everyone
-6. Promote to Production when ready
-7. Review takes 1–7 business days
+**App Store:** appstoreconnect.apple.com → new app (Bundle ID
+`com.aifysolutions.pea`), attach the build, fill the listing (see
+`STORE_LISTING.md`), submit. Or `eas submit --platform ios` after filling the
+`submit.production.ios` block in `eas.json`.
 
-═══════════════════════════════════════════════════════
-COST SUMMARY
-═══════════════════════════════════════════════════════
+**Play Store:** play.google.com/console → new app (package
+`com.aifysolutions.pea`) → upload the `.aab` to Internal testing → promote to
+Production. Or `eas submit --platform android` with a service-account key.
 
-Item                    Cost
-─────────────────────── ─────────────
-GitHub + Codespaces     Free
-Expo / EAS Build        Free (30/mo)
-Vercel (API proxy)      Free
-Apple Developer         $99/yr ✅ (you have this)
-Google Play             $25 one-time
-Anthropic API           ~$0.001/capture
+---
 
-═══════════════════════════════════════════════════════
-IF ANYTHING GOES WRONG
-═══════════════════════════════════════════════════════
+## Pre-submit checklist
 
-Paste this into a new Claude chat:
-"You are my developer for Pea app. I'm stuck on [STEP X].
-Here is the error: [paste error]"
-Then attach this DEPLOY_STEPS.md file.
+Run locally before every release build:
+
+```bash
+npm run typecheck   # zero TypeScript errors
+npm run lint        # zero ESLint errors
+npm test            # all unit tests pass
+```
+
+- [ ] `EXPO_PUBLIC_PEA_API_URL` set as an EAS production env var
+- [ ] Vercel has `ANTHROPIC_API_KEY` and `OPENAI_API_KEY`
+- [ ] Privacy policy URL ready (app records audio + sends notifications)
+- [ ] `version` / `buildNumber` / `versionCode` bumped in `app.json`
+- [ ] Screenshots captured on a real device or simulator
