@@ -1,19 +1,20 @@
-// Vercel Serverless Function — Whisper audio transcription
-// Set env var: OPENAI_API_KEY in Vercel dashboard
+// Vercel Serverless Function — Whisper audio transcription.
+// Env: OPENAI_API_KEY (required).
+
+const { guard } = require('./_lib/guard');
+
+// The app stops recording at 30 seconds (~0.5 MB of AAC, ~0.7 MB as base64).
+// 2 MB leaves headroom and keeps a single call's Whisper cost bounded.
+const MAX_BASE64_LENGTH = 2_000_000;
 
 module.exports = async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!(await guard(req, res, 'transcribe'))) return;
 
   const { audioBase64, mimeType } = req.body || {};
   if (typeof audioBase64 !== 'string' || !audioBase64) {
     return res.status(400).json({ error: 'Missing audioBase64' });
   }
-  // ~15 MB of base64 ≈ 11 MB of audio — far above any hold-to-speak capture
-  if (audioBase64.length > 15_000_000) {
+  if (audioBase64.length > MAX_BASE64_LENGTH) {
     return res.status(413).json({ error: 'Audio too large' });
   }
   if (mimeType !== undefined && (typeof mimeType !== 'string' || !/^audio\/[\w.+-]+$/.test(mimeType))) {
@@ -38,9 +39,8 @@ module.exports = async function handler(req, res) {
     });
 
     if (!response.ok) {
-      const errText = await response.text();
-      console.error('Whisper error:', response.status, errText);
-      return res.status(500).json({ error: 'Transcription failed' });
+      console.error('Whisper error:', response.status, await response.text());
+      return res.status(502).json({ error: 'Transcription failed' });
     }
 
     const data = await response.json();

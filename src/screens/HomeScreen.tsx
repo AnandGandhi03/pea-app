@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
-  StyleSheet, Platform, Animated, Keyboard, Alert, Linking, BackHandler,
+  StyleSheet, Platform, Animated, Keyboard, Alert, Linking, BackHandler, ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { P, FONT } from '../theme';
 import { CATS } from '../categories';
-import { CONFIG } from '../config';
+import { privacyUrl } from '../config';
 import { cap, todayStr, getGreeting, dateLabel, relativeTime, newId } from '../lib/format';
 import { localClassify } from '../lib/classify';
 import { classifyRemote, generateDraft } from '../services/aiService';
@@ -15,7 +15,7 @@ import { Toast, ToastData } from '../components/Toast';
 import { VoiceOverlay } from '../components/VoiceOverlay';
 import { ResultScreen } from './ResultScreen';
 import { BriefScreen } from './BriefScreen';
-import { isCategoryKey, CATEGORY_KEYS } from '../types';
+import { CATEGORY_KEYS } from '../types';
 import type { AppData, CategoryKey, Item, LastAction, Tab } from '../types';
 
 interface HomeScreenProps {
@@ -33,13 +33,14 @@ export function HomeScreen({ data, onUpdate, onReset }: HomeScreenProps) {
   const [toast,      setToast]      = useState<ToastData | null>(null);
   const [typeOpen,   setTypeOpen]   = useState(false);
   const [typedText,  setTypedText]  = useState('');
+  const [draftingId, setDraftingId] = useState<string | null>(null);
   const holdingRef = useRef(false);
 
   function showToast(msg: string) { setToast({ msg, id: Date.now() }); }
 
   // Voice errors surface as gentle toasts (design rule: no red states)
   const { micState, startRecording, stopAndTranscribe, cancelRecording } =
-    useVoiceCapture(showToast);
+    useVoiceCapture({ onError: showToast, onMaxDuration: finishVoiceCapture });
 
   const ringAnim = useRef(new Animated.Value(0)).current;
 
@@ -58,7 +59,6 @@ export function HomeScreen({ data, onUpdate, onReset }: HomeScreenProps) {
   useEffect(() => () => { cancelRecording(); }, []);
 
   const todayCaptures = data.lastCountReset === todayStr() ? (data.captureCount || 0) : 0;
-  const canCapture    = todayCaptures < CONFIG.FREE_CAPTURES_PER_DAY;
 
   // Android back: close sub-screens first
   useEffect(() => {
@@ -76,15 +76,6 @@ export function HomeScreen({ data, onUpdate, onReset }: HomeScreenProps) {
   function saveCapture(rawText: string, transcript: string): LastAction | null {
     const t = rawText.trim();
     if (!t) return null;
-
-    if (!canCapture) {
-      Alert.alert(
-        'Daily limit reached',
-        `You've used all ${CONFIG.FREE_CAPTURES_PER_DAY} free captures today.\nUpgrade to Pea Pro for unlimited — ${CONFIG.PRO_PRICE}`,
-        [{ text: 'OK' }],
-      );
-      return null;
-    }
 
     const r = localClassify(t) || { category: 'do' as CategoryKey, cleaned: cap(t) };
     const newItem: Item = {
@@ -108,42 +99,36 @@ export function HomeScreen({ data, onUpdate, onReset }: HomeScreenProps) {
       };
     });
 
-    // Background: Claude reclassification for ambiguous items + draft generation
-    (async () => {
-      const wasLocal = !!localClassify(t);
-      let effectiveCategory = r.category;
-      if (!wasLocal) {
-        const result = await classifyRemote(t, data.userName);
-        if (result && isCategoryKey(result.category) && result.category !== r.category) {
-          effectiveCategory = result.category;
-          onUpdate(prev => ({
+    // Background: Claude reclassification for captures the on-device
+    // classifier couldn't place. Saving never waits on (or needs) the network.
+    if (!localClassify(t)) {
+      (async () => {
+        const result = await classifyRemote(t);
+        if (!result) return;
+        onUpdate(prev => {
+          const current = prev.items[r.category].find(i => i.id === newItem.id);
+          if (!current) return prev; // undone or moved in the meantime
+          const updated = { ...current, text: result.cleaned };
+          if (result.category === r.category) {
+            return {
+              ...prev,
+              items: {
+                ...prev.items,
+                [r.category]: prev.items[r.category].map(i => i.id === newItem.id ? updated : i),
+              },
+            };
+          }
+          return {
             ...prev,
             items: {
               ...prev.items,
-              [r.category]:        prev.items[r.category].filter(i => i.id !== newItem.id),
-              [effectiveCategory]: [
-                { ...newItem, text: result.cleaned },
-                ...prev.items[effectiveCategory],
-              ],
+              [r.category]:      prev.items[r.category].filter(i => i.id !== newItem.id),
+              [result.category]: [updated, ...prev.items[result.category]],
             },
-          }));
-        }
-      }
-      if (['call', 'follow'].includes(effectiveCategory)) {
-        const draft = await generateDraft(t, data.userName);
-        if (draft) {
-          onUpdate(prev => ({
-            ...prev,
-            items: {
-              ...prev.items,
-              [effectiveCategory]: prev.items[effectiveCategory].map(i =>
-                i.id === newItem.id ? { ...i, draft } : i
-              ),
-            },
-          }));
-        }
-      }
-    })();
+          };
+        });
+      })();
+    }
 
     return { itemId: newItem.id, category: r.category, cleaned: r.cleaned, transcript };
   }
@@ -163,27 +148,27 @@ export function HomeScreen({ data, onUpdate, onReset }: HomeScreenProps) {
 
   // ── Voice: hold to speak ──
   async function handleMicPressIn() {
-    if (!canCapture) {
-      Alert.alert('Daily limit reached', `Upgrade to Pea Pro for unlimited captures — ${CONFIG.PRO_PRICE}`);
-      return;
-    }
     holdingRef.current = true;
     await startRecording();
     // User released before recording actually started → clean up
     if (!holdingRef.current) await cancelRecording();
   }
 
+  // Ends a recording and saves it. Runs on finger release, and also when a
+  // recording reaches the maximum length (hoisted so the hook can call it).
+  async function finishVoiceCapture() {
+    holdingRef.current = false;
+    const transcript = await stopAndTranscribe();
+    if (transcript) {
+      const action = saveCapture(transcript, transcript);
+      if (action) setLastAction(action);
+    }
+  }
+
   async function handleMicPressOut() {
     holdingRef.current = false;
-    if (micState === 'recording') {
-      const transcript = await stopAndTranscribe();
-      if (transcript) {
-        const action = saveCapture(transcript, transcript);
-        if (action) setLastAction(action);
-      }
-    } else {
-      await cancelRecording();
-    }
+    if (micState === 'recording') await finishVoiceCapture();
+    else await cancelRecording();
   }
 
   function handleTypedSave() {
@@ -208,6 +193,32 @@ export function HomeScreen({ data, onUpdate, onReset }: HomeScreenProps) {
       },
     }));
     if (!wasDone) showToast('Nice — done ✓');
+  }
+
+  // Drafts are written only when asked for — never automatically.
+  async function requestDraft(item: Item & { cat: CategoryKey }) {
+    if (draftingId) return;
+    setDraftingId(item.id);
+    const result = await generateDraft(item.text);
+    setDraftingId(null);
+
+    if (!result.ok) {
+      showToast(
+        result.reason === 'limit'  ? 'Drafts are resting for today — back tomorrow.' :
+        result.reason === 'no-api' ? 'Drafts need a connection.' :
+                                     "Couldn't write that one — try again.",
+      );
+      return;
+    }
+
+    onUpdate(prev => ({
+      ...prev,
+      items: {
+        ...prev.items,
+        [item.cat]: prev.items[item.cat].map(i => i.id === item.id ? { ...i, draft: result.draft } : i),
+      },
+    }));
+    openDraft(result.draft);
   }
 
   function openDraft(draft: string) {
@@ -236,7 +247,11 @@ export function HomeScreen({ data, onUpdate, onReset }: HomeScreenProps) {
     .flatMap(cat => data.items[cat].map(i => ({ ...i, cat })));
   const activeItems  = allItems.filter(i => !i.done);
   const recentItems  = [...allItems].sort((a, b) => b.createdAt - a.createdAt).slice(0, 4);
-  const draftItems   = activeItems.filter(i => i.draft);
+  const draftItems     = activeItems.filter(i => i.draft);
+  // Calls and follow-ups can all have a message drafted; ready ones first.
+  const draftableItems = activeItems
+    .filter(i => i.cat === 'call' || i.cat === 'follow')
+    .sort((a, b) => Number(!!b.draft) - Number(!!a.draft));
   const counts: Record<CategoryKey, number> = {
     buy:    data.items.buy.filter(i => !i.done).length,
     do:     data.items.do.filter(i => !i.done).length,
@@ -429,32 +444,50 @@ export function HomeScreen({ data, onUpdate, onReset }: HomeScreenProps) {
   const renderDrafts = () => (
     <ScrollView contentContainerStyle={{ padding: 20, gap: 10, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
       <Text style={s.tabTitle}>Drafts</Text>
-      {draftItems.length === 0 ? (
+      {draftableItems.length === 0 ? (
         <View style={s.emptyBox}>
           <Text style={{ fontSize: 40, marginBottom: 10 }}>✉️</Text>
-          <Text style={s.emptyTitle}>No drafts yet</Text>
+          <Text style={s.emptyTitle}>Nothing to draft yet</Text>
           <Text style={s.emptySub}>
-            When you capture a call or follow-up,{'\n'}Pea writes the message for you
+            Capture a call or follow-up and{'\n'}Pea can write the message for you
           </Text>
         </View>
       ) : (
-        draftItems.map(item => (
-          <TouchableOpacity
-            key={`${item.id}-${item.cat}`}
-            style={s.draftCard}
-            onPress={() => openDraft(item.draft!)}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel={`Send draft for ${item.text}`}
-          >
-            <Text style={s.draftFor}>{CATS[item.cat].icon} {item.text}</Text>
-            <Text style={s.draftBody} numberOfLines={2}>"{item.draft}"</Text>
-            <Text style={s.draftSend}>tap to send →</Text>
-          </TouchableOpacity>
-        ))
+        draftableItems.map(item => {
+          const drafting = draftingId === item.id;
+          return (
+            <TouchableOpacity
+              key={`${item.id}-${item.cat}`}
+              style={s.draftCard}
+              onPress={() => (item.draft ? openDraft(item.draft) : requestDraft(item))}
+              disabled={!!draftingId}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityState={{ busy: drafting }}
+              accessibilityLabel={item.draft ? `Send draft for ${item.text}` : `Write a draft for ${item.text}`}
+            >
+              <Text style={s.draftFor}>{CATS[item.cat].icon} {item.text}</Text>
+              {item.draft ? (
+                <>
+                  <Text style={s.draftBody} numberOfLines={2}>"{item.draft}"</Text>
+                  <Text style={s.draftSend}>tap to send →</Text>
+                </>
+              ) : drafting ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <ActivityIndicator size="small" color={P.green} />
+                  <Text style={s.draftSend}>Pea is writing…</Text>
+                </View>
+              ) : (
+                <Text style={s.draftSend}>tap and Pea writes the message →</Text>
+              )}
+            </TouchableOpacity>
+          );
+        })
       )}
     </ScrollView>
   );
+
+  const policyUrl = privacyUrl();
 
   const renderMe = () => (
     <ScrollView contentContainerStyle={{ padding: 20, gap: 12, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
@@ -472,13 +505,24 @@ export function HomeScreen({ data, onUpdate, onReset }: HomeScreenProps) {
 
       <View style={s.meCard}>
         <Text style={s.meLabel}>Captures today</Text>
-        <Text style={s.meValue}>
-          {todayCaptures} of {CONFIG.FREE_CAPTURES_PER_DAY} free
+        <Text style={s.meValue}>{todayCaptures}</Text>
+      </View>
+
+      <View style={s.meCard}>
+        <Text style={s.meLabel}>Your data</Text>
+        <Text style={s.meNote}>
+          Your lists stay on this phone. Voice notes and the text of your captures
+          are sent securely to be transcribed and sorted, and are not kept by Pea.
         </Text>
-        {!canCapture && (
-          <Text style={[s.meLabel, { marginTop: 4, textTransform: 'none', letterSpacing: 0 }]}>
-            Upgrade to Pea Pro for unlimited — {CONFIG.PRO_PRICE}
-          </Text>
+        {policyUrl && (
+          <TouchableOpacity
+            onPress={() => Linking.openURL(policyUrl).catch(() => showToast("Couldn't open the page."))}
+            activeOpacity={0.7}
+            accessibilityRole="link"
+            accessibilityLabel="Read the privacy policy"
+          >
+            <Text style={s.meLink}>Privacy policy →</Text>
+          </TouchableOpacity>
         )}
       </View>
 
@@ -589,6 +633,8 @@ const s = StyleSheet.create({
   meCard:       { backgroundColor: '#fff', borderWidth: 0.5, borderColor: P.border, borderRadius: 16, padding: 14 },
   meLabel:      { fontSize: 10, fontFamily: FONT.bodySemi, letterSpacing: 1, textTransform: 'uppercase', color: P.muted, marginBottom: 4 },
   meValue:      { fontSize: 16, color: P.text, fontFamily: FONT.body },
+  meNote:       { fontSize: 13, color: P.muted, fontFamily: FONT.body, lineHeight: 19 },
+  meLink:       { fontSize: 13, color: P.green, fontFamily: FONT.bodyMed, marginTop: 10 },
   resetBtn:     { borderWidth: 1, borderColor: P.border, borderRadius: 16, padding: 14, alignItems: 'center', marginTop: 8 },
   resetTxt:     { fontSize: 13, color: P.muted, fontFamily: FONT.bodyMed },
   nav:          { flexDirection: 'row', justifyContent: 'space-around', paddingTop: 8, backgroundColor: '#fff', borderTopWidth: 0.5, borderTopColor: P.border },

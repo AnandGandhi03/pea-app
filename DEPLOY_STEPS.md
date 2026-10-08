@@ -1,120 +1,70 @@
-# 🌿 Pea — Production Deploy Guide
+# Pea — Deploy Guide
 
-Local-first launch. The app runs fully on-device; the Vercel API adds AI
-reclassification, drafts, and voice transcription. If the API URL is unset the
-app degrades gracefully (on-device classification still works).
+See `RELEASE_CHECKLIST.md` for the ordered release steps. This file explains the pieces.
 
-Current working branch: `claude/pea-app-bug-fixes-3q3wbj`
-
----
-
-## Prerequisites
-
-| Item | Cost | Notes |
-| --- | --- | --- |
-| Expo account | Free | expo.dev — EAS build (30 free builds/mo) |
-| Apple Developer | $99/yr | For App Store |
-| Google Play Console | $25 once | For Play Store |
-| Vercel | Free | Hosts the AI proxy (`api/`) |
-| Anthropic API key | ~$0.001/capture | console.anthropic.com |
-| OpenAI API key | Whisper usage | platform.openai.com (voice transcription) |
-
----
-
-## Step 1 — Deploy the AI proxy to Vercel
-
-Keeps API keys off the device (App Store requirement). The `api/` folder and
-`vercel.json` are already in the repo.
-
-1. vercel.com → **Add New Project** → import `AnandGandhi03/pea-app`.
-2. Deploy (Vercel auto-detects the serverless functions).
-3. Project Settings → **Environment Variables** → add:
-   - `ANTHROPIC_API_KEY` — from console.anthropic.com (classification + drafts)
-   - `OPENAI_API_KEY` — from platform.openai.com (Whisper transcription)
-4. **Redeploy** so the keys take effect.
-5. Copy the deployment URL, e.g. `https://pea-app-xxxx.vercel.app`.
-
-Endpoints exposed: `/api/classify` (also handles `mode: "draft"`) and
-`/api/transcribe`.
-
----
-
-## Step 2 — Point the app at your API
-
-The app reads the base URL from the `EXPO_PUBLIC_PEA_API_URL` environment
-variable (no trailing slash). There is no hardcoded URL in the source.
-
-**For local development** — create `.env` (copy from `.env.example`):
+## How it fits together
 
 ```
-EXPO_PUBLIC_PEA_API_URL=https://pea-app-xxxx.vercel.app
+iPhone app ──HTTPS──▶ Vercel (api/classify, api/transcribe) ──▶ Anthropic / OpenAI
+                      └─ public/privacy.html  (the privacy policy)
 ```
 
-**For release builds** — set it as an EAS environment variable so it is baked
-into the build:
+- The app holds no API keys. It talks only to the Vercel deployment, whose URL
+  is baked in at build time from `EXPO_PUBLIC_PEA_API_URL`.
+- With no URL set the app runs local-only: typed captures and on-device sorting
+  work; voice, AI re-sorting and drafts are off.
+
+## Vercel
+
+Import the repo as a project. `vercel.json` already sets everything: no build
+step, static files from `public/`, functions from `api/`.
+
+| Env var | Required | Purpose |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | yes | Sorting captures and writing drafts |
+| `OPENAI_API_KEY` | yes | Whisper voice transcription |
+| `UPSTASH_REDIS_REST_URL` / `_TOKEN` (or `KV_REST_API_URL` / `_TOKEN`) | recommended | Shared rate-limit counters; added automatically by the Upstash integration |
+| `PEA_MODEL` | no | Override the Claude model (default `claude-haiku-4-5-20251001`) |
+| `PEA_GLOBAL_DAILY_LIMIT` | no | Ceiling on total API calls per day (default 2000) |
+
+### Usage limits (`api/_lib/guard.js`)
+
+Per UTC day: 60 classifications, 20 drafts and 40 transcriptions per device
+(3× that per IP), 20 requests a minute per IP, and a global daily ceiling.
+Over-limit requests get HTTP 429 and never reach Anthropic or OpenAI.
+
+Without Upstash the counters are in-memory per function instance — good enough
+for a few testers, but not a hard ceiling. Add Upstash before a public launch,
+and keep spend caps set in both provider consoles either way.
+
+### Check a deployment
 
 ```bash
-eas env:create --name EXPO_PUBLIC_PEA_API_URL \
-  --value https://pea-app-xxxx.vercel.app \
-  --environment production --visibility plaintext
+URL=https://your-project.vercel.app
+curl -s -X POST $URL/api/classify -H 'Content-Type: application/json' \
+  -H 'x-pea-device: manual-test-0001' -d '{"text":"ring the daycare about friday"}'
+curl -s -X POST $URL/api/classify -H 'Content-Type: application/json' \
+  -H 'x-pea-device: manual-test-0001' -d '{"text":"follow up with daycare","mode":"draft"}'
 ```
 
-(Leave it unset to ship a local-only build — voice and AI enrichment are
-disabled, on-device capture still works.)
-
----
-
-## Step 3 — Build with EAS (run from your Codespace or local machine)
-
-> The cloud review environment cannot reach expo.dev; run these where you are
-> logged into EAS.
+## iOS build
 
 ```bash
-git pull origin claude/pea-app-bug-fixes-3q3wbj
 npm install
 npm install -g eas-cli
 eas login
-eas init          # first time only; commit the generated projectId in app.json
-
-# Android APK (sideload / internal testing)
-eas build --platform android --profile production
-
-# Android AAB (Play Store)
-eas build --platform android --profile production-aab
-
-# iOS (App Store) — needs your Apple Developer account
 eas build --platform ios --profile production
+eas submit --platform ios --latest
 ```
 
-Answer **Y** if prompted to generate a keystore (EAS manages it).
+EAS handles signing. Build numbers auto-increment (`appVersionSource: remote`).
 
----
-
-## Step 4 — Submit
-
-**App Store:** appstoreconnect.apple.com → new app (Bundle ID
-`com.aifysolutions.pea`), attach the build, fill the listing (see
-`STORE_LISTING.md`), submit. Or `eas submit --platform ios` after filling the
-`submit.production.ios` block in `eas.json`.
-
-**Play Store:** play.google.com/console → new app (package
-`com.aifysolutions.pea`) → upload the `.aab` to Internal testing → promote to
-Production. Or `eas submit --platform android` with a service-account key.
-
----
-
-## Pre-submit checklist
-
-Run locally before every release build:
+## Local development
 
 ```bash
-npm run typecheck   # zero TypeScript errors
-npm run lint        # zero ESLint errors
-npm test            # all unit tests pass
+cp .env.example .env    # set EXPO_PUBLIC_PEA_API_URL
+npm start
+npm run typecheck && npm run lint && npm test
 ```
 
-- [ ] `EXPO_PUBLIC_PEA_API_URL` set as an EAS production env var
-- [ ] Vercel has `ANTHROPIC_API_KEY` and `OPENAI_API_KEY`
-- [ ] Privacy policy URL ready (app records audio + sends notifications)
-- [ ] `version` / `buildNumber` / `versionCode` bumped in `app.json`
-- [ ] Screenshots captured on a real device or simulator
+Test voice capture on a real device — simulators have no usable microphone input for this.

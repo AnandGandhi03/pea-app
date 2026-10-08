@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pea — Privacy Policy</title>
+<style>
+  :root { --bg:#faf9f5; --text:#1c2b22; --muted:#6b7f71; --green:#4a7c59; --line:rgba(74,124,89,.18); --card:#fff; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14201a; --text:#e9efe9; --muted:#9fb0a4; --green:#8cc79b; --line:rgba(140,199,155,.2); --card:#1a2a21; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font: 17px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 680px; margin: 0 auto; padding: 56px 20px 80px; }
+  h1, h2 { font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif; font-weight: 400; line-height: 1.2; }
+  h1 { font-size: 40px; margin: 0 0 6px; }
+  h2 { font-size: 24px; margin: 44px 0 10px; }
+  p, li { margin: 0 0 12px; }
+  ul { padding-left: 22px; margin: 0 0 12px; }
+  a { color: var(--green); }
+  .meta { color: var(--muted); font-size: 14px; margin-bottom: 32px; }
+  .summary { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 20px 22px; }
+  .summary p:last-child, .summary ul:last-child { margin-bottom: 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; margin: 8px 0 12px; }
+  th, td { text-align: left; vertical-align: top; padding: 10px 12px 10px 0; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+  .scroll { overflow-x: auto; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Privacy Policy</h1>
+  <p class="meta">Pea, by AIfy Solutions · Effective October 7, 2026</p>
+
+  <div class="summary">
+    <p><strong>The short version</strong></p>
+    <ul>
+      <li>Pea has no accounts. Your lists live on your phone, not on our servers.</li>
+      <li>When you speak or type a capture, the recording or text may be sent to be transcribed and sorted, and is then discarded by us.</li>
+      <li>We do not sell your data, show ads, or track you across other apps.</li>
+    </ul>
+  </div>
+
+  <h2>Who we are</h2>
+  <p>Pea is made by AIfy Solutions, based in Surrey, British Columbia, Canada. You can reach us through
+     <a href="https://aify.solutions">aify.solutions</a>.</p>
+
+  <h2>What stays on your phone</h2>
+  <p>Your first name, your morning-brief time, and every item on your lists (including any drafted messages)
+     are stored only in the app's storage on your device. We cannot see them, and they are not backed up to our servers.
+     Choosing <em>Reset Pea</em> in the app, or deleting the app, removes them.</p>
+
+  <h2>What leaves your phone, and why</h2>
+  <div class="scroll">
+  <table>
+    <tr><th>What</th><th>When</th><th>Where it goes</th></tr>
+    <tr>
+      <td>Voice recording (up to 30 seconds)</td>
+      <td>When you hold the mic to capture</td>
+      <td>Our server passes it to OpenAI to be transcribed into text.</td>
+    </tr>
+    <tr>
+      <td>Text of a capture</td>
+      <td>When Pea can't sort a capture on the phone, or you ask for a drafted message</td>
+      <td>Our server passes it to Anthropic to be sorted or to write the draft.</td>
+    </tr>
+    <tr>
+      <td>A random install ID and your IP address</td>
+      <td>With each of the requests above</td>
+      <td>Our server, to apply fair-use limits and prevent abuse.</td>
+    </tr>
+  </table>
+  </div>
+  <p>Your first name is not sent with these requests. Many captures are sorted entirely on your phone and never leave it.</p>
+
+  <h2>What we keep</h2>
+  <p>Our server does not store your recordings or the text of your captures; it relays them and returns the result to your phone.
+     Usage counters tied to the install ID and IP address are kept for up to 24 hours. Our hosting provider keeps standard
+     short-lived request logs (such as time, IP address and response status) for operating and securing the service.</p>
+
+  <h2>Companies that process data for us</h2>
+  <ul>
+    <li><strong>OpenAI</strong> — speech-to-text transcription. <a href="https://openai.com/policies/privacy-policy">Privacy policy</a></li>
+    <li><strong>Anthropic</strong> — sorting captures and writing drafts. <a href="https://www.anthropic.com/legal/privacy">Privacy policy</a></li>
+    <li><strong>Vercel</strong> — hosting our server. <a href="https://vercel.com/legal/privacy-policy">Privacy policy</a></li>
+    <li><strong>Upstash</strong> — storing the short-lived usage counters, where enabled. <a href="https://upstash.com/trust/privacy.pdf">Privacy policy</a></li>
+  </ul>
+  <p>These companies handle the data under their own terms and may retain it for a limited period for purposes such as
+     abuse monitoring. They may process data outside Canada, including in the United States.
+     Please avoid including information in a capture that you would not want processed this way.</p>
+
+  <h2>What we don't do</h2>
+  <ul>
+    <li>No advertising, and no advertising or analytics SDKs in the app.</li>
+    <li>No selling or sharing of your data for marketing.</li>
+    <li>No tracking across other companies' apps or websites.</li>
+    <li>No access to your contacts, location, photos, or messages. When you send a draft, Pea hands the text to your
+        phone's Messages app; you choose the recipient and send it yourself.</li>
+  </ul>
+
+  <h2>Permissions</h2>
+  <ul>
+    <li><strong>Microphone</strong> — only while you hold the mic button, to record a voice capture.</li>
+    <li><strong>Notifications</strong> — to deliver your morning brief. These are scheduled on your phone, not sent from a server.</li>
+  </ul>
+  <p>You can turn either off in your phone's settings; typing a capture still works without the microphone.</p>
+
+  <h2>Children</h2>
+  <p>Pea is designed for parents and other adults. It is not directed to children, and we do not knowingly collect personal information from children.</p>
+
+  <h2>Your choices</h2>
+  <p>Because your lists are stored only on your device and we hold no account for you, you control and can delete that data
+     yourself at any time. If you have a question about the limited information described above, or a request under
+     Canadian privacy law (PIPEDA) or another law that applies to you, contact us through
+     <a href="https://aify.solutions">aify.solutions</a>.</p>
+
+  <h2>Changes</h2>
+  <p>If we change how Pea handles data, we will update this page and its effective date before the change takes effect.</p>
+</main>
+</body>
+</html>

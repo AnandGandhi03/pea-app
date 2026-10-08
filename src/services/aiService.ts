@@ -1,20 +1,22 @@
 // All network AI calls go through the Vercel proxy — API keys never live in
-// the app bundle. Every call has a timeout and a single retry; failures
-// return null and the caller degrades gracefully.
+// the app bundle. Every call has a timeout; failures return a typed reason and
+// the caller degrades gracefully. The server enforces usage limits (429).
 
 import { apiUrl, hasApi } from '../config';
 import { isCategoryKey } from '../types';
 import type { Classification } from '../types';
+import { getDeviceId } from './device';
 
 const TIMEOUT_MS = 12_000;
 
 async function postJson(url: string, body: unknown, timeoutMs = TIMEOUT_MS): Promise<Response> {
+  const deviceId = await getDeviceId();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(url, {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-pea-device': deviceId },
       body:    JSON.stringify(body),
       signal:  controller.signal,
     });
@@ -23,6 +25,7 @@ async function postJson(url: string, body: unknown, timeoutMs = TIMEOUT_MS): Pro
   }
 }
 
+// One retry on network errors and 5xx only — never on 4xx (incl. rate limits).
 async function postJsonWithRetry(url: string, body: unknown, timeoutMs = TIMEOUT_MS): Promise<Response | null> {
   try {
     const res = await postJson(url, body, timeoutMs);
@@ -37,9 +40,9 @@ async function postJsonWithRetry(url: string, body: unknown, timeoutMs = TIMEOUT
   }
 }
 
-export async function classifyRemote(text: string, userName: string): Promise<Classification | null> {
+export async function classifyRemote(text: string): Promise<Classification | null> {
   if (!hasApi()) return null;
-  const res = await postJsonWithRetry(apiUrl('/api/classify'), { text, userName });
+  const res = await postJsonWithRetry(apiUrl('/api/classify'), { text });
   if (!res?.ok) return null;
   try {
     const data = await res.json();
@@ -50,21 +53,28 @@ export async function classifyRemote(text: string, userName: string): Promise<Cl
   return null;
 }
 
-export async function generateDraft(itemText: string, userName: string): Promise<string | null> {
-  if (!hasApi()) return null;
-  const res = await postJsonWithRetry(apiUrl('/api/classify'), { text: itemText, userName, mode: 'draft' });
-  if (!res?.ok) return null;
+export type DraftResult =
+  | { ok: true; draft: string }
+  | { ok: false; reason: 'no-api' | 'limit' | 'failed' };
+
+export async function generateDraft(itemText: string): Promise<DraftResult> {
+  if (!hasApi()) return { ok: false, reason: 'no-api' };
+  const res = await postJsonWithRetry(apiUrl('/api/classify'), { text: itemText, mode: 'draft' });
+  if (!res) return { ok: false, reason: 'failed' };
+  if (res.status === 429) return { ok: false, reason: 'limit' };
+  if (!res.ok) return { ok: false, reason: 'failed' };
   try {
     const data = await res.json();
-    return typeof data?.draft === 'string' && data.draft.trim() ? data.draft.trim() : null;
+    const draft = typeof data?.draft === 'string' ? data.draft.trim() : '';
+    return draft ? { ok: true, draft } : { ok: false, reason: 'failed' };
   } catch {
-    return null;
+    return { ok: false, reason: 'failed' };
   }
 }
 
 export type TranscribeResult =
   | { ok: true; text: string }
-  | { ok: false; reason: 'no-api' | 'failed' | 'empty' };
+  | { ok: false; reason: 'no-api' | 'limit' | 'failed' | 'empty' };
 
 export async function transcribeAudio(audioBase64: string, mimeType: string): Promise<TranscribeResult> {
   if (!hasApi()) return { ok: false, reason: 'no-api' };
@@ -75,6 +85,7 @@ export async function transcribeAudio(audioBase64: string, mimeType: string): Pr
   } catch {
     return { ok: false, reason: 'failed' };
   }
+  if (res.status === 429) return { ok: false, reason: 'limit' };
   if (!res.ok) return { ok: false, reason: 'failed' };
   try {
     const data = await res.json();
