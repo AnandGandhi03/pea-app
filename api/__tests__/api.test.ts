@@ -150,6 +150,19 @@ describe('classify handler', () => {
     expect(res.statusCode).toBe(502);
   });
 
+  it('reports the provider status and error class, but not the message', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+      text: async () => JSON.stringify({ type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key sk-secret' } }),
+    });
+    const res = mockRes();
+    await classify(mockReq({ text: 'something' }), res);
+    expect(res.statusCode).toBe(502);
+    expect(res.body.upstream).toEqual({ status: 401, type: 'authentication_error' });
+    expect(JSON.stringify(res.body)).not.toContain('sk-secret');
+  });
+
   it('validates input before calling the provider', async () => {
     for (const body of [{}, { text: '   ' }, { text: 'x'.repeat(1001) }]) {
       const res = mockRes();
