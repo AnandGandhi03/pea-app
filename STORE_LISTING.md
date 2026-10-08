@@ -1,65 +1,74 @@
-# Pea — App Store Listing Copy
+# Pea — App Store Listing (v1.0.0, free)
 
-## APP NAME
+## App name
 Pea
 
-## SUBTITLE (iOS App Store, 30 chars max)
+## Subtitle (30 chars max)
 Voice-first family assistant
 
-## SHORT DESCRIPTION (Google Play, 80 chars max)
-Remember everything. Pea captures, sorts, and drafts for you.
+## Promotional text (170 chars max)
+Pea remembers so you don't have to. Say it in a few seconds — Pea sorts it, drafts the message, and briefs you every morning.
 
-## FULL DESCRIPTION (Apple App Store & Google Play)
+## Description
 
-Pea is the family assistant built for the chaos of real parenting. Forget sticky notes and forgotten mental lists — just speak, and Pea handles the rest.
+Pea is the family assistant built for the chaos of new parenthood. Forget sticky notes and mental lists — just say it, and Pea handles the rest.
 
-**HOW IT WORKS:**
-• Tap "Remember something" and type or speak your thought
-• Pea's AI instantly sorts it: To Buy, To Do, To Call, or Follow Up — no manual tagging ever
-• For call and follow-up items, Pea drafts the message for you, ready to send in one tap
-• Every morning at your chosen time, Pea sends a brief of everything waiting for you
+HOW IT WORKS
+• Hold the mic and say what's on your mind, or type it
+• Pea sorts it for you: To Buy, To Do, To Call, or Follow Up — no manual tagging
+• For calls and follow-ups, tap once and Pea drafts the message, ready to send
+• Every morning at the time you choose, Pea sends a brief of what's waiting
 
-**BUILT FOR NEW PARENTS:**
-Pediatric appointments, grocery runs, school calls, follow-ups with the doctor — Pea captures it all in under 3 seconds, even at 4am.
+BUILT FOR NEW PARENTS
+Pediatrician appointments, grocery runs, daycare calls, follow-ups — captured in seconds, even at 4am.
 
-**FREE:** 5 captures per day
-**PEA PRO:** Unlimited captures — $7.99/month
+PRIVATE BY DESIGN
+No account. Your lists stay on your phone.
+
+Pea is free.
+
+## Keywords (100 chars max)
+family,parents,tasks,reminders,assistant,baby,organize,voice,notes,newborn
+
+## Category
+Productivity (secondary: Lifestyle)
+
+## Age rating
+4+
+
+## Privacy policy URL
+https://<your-vercel-project>.vercel.app/privacy
+
+## Support URL
+https://aify.solutions
+
+## What's New (v1.0.0)
+First release.
+
+## Review notes (for App Review)
+Pea needs no account or login. Hold the mic button on the Home tab to record a
+voice note (microphone permission), or tap "or type it". Voice notes are
+transcribed by our server and sorted into lists. There are no in-app purchases.
 
 ---
 
-## KEYWORDS (iOS, 100 chars max)
-family,parents,tasks,reminders,assistant,baby,organize,voice,notes,AI
+## App Privacy answers (App Store Connect → App Privacy)
 
-## CATEGORY
-Productivity
+"Do you or your third-party partners collect data from this app?" → **Yes**
 
-## AGE RATING
-- iOS: 4+
-- Android: Everyone
+| Data type | Collected | Linked to the user | Used for tracking | Purpose |
+|---|---|---|---|---|
+| User Content → Audio Data | Yes | No | No | App Functionality |
+| User Content → Other User Content (capture text) | Yes | No | No | App Functionality |
+| Identifiers → Device ID (random install ID) | Yes | No | No | App Functionality |
 
-## PRIVACY POLICY URL
-https://www.privacypolicygenerator.info
-(Generate one before submission — required by both stores)
+Everything else → not collected. No name, contact info, location, contacts,
+usage analytics, diagnostics or advertising data. Keep these in step with
+`public/privacy.html` if the app's data handling changes.
 
----
-
-## SCREENSHOTS NEEDED (per store guidelines)
-
-### iPhone (6.9" — iPhone 16 Pro Max)
-1. Home screen — morning brief card with 3–4 sample items
-2. Capture sheet open — AI classification pill showing "To Buy · Milk and eggs"
-3. Category detail view — To Call list with draft button visible
-4. Onboarding step 1 — name entry
-5. Onboarding step 2 — time picker
-
-### iPad (12.9" — required for iOS universal)
-Same 5 screens at iPad resolution
-
-### Android (Phone)
-Same 5 screens, at least 2 required
-
-## PROMOTIONAL TEXT (iOS only, 170 chars, can be updated without new build)
-Pea remembers so you don't have to. Capture anything in under 3 seconds — Pea's AI sorts, drafts, and briefs you every morning.
-
-## WHAT'S NEW (v1.0.0)
-First release. Pea is here to help busy parents remember everything — grocery runs, calls, follow-ups — sorted automatically by AI.
+## Screenshots (iPhone 6.9" only — the app does not support iPad)
+1. Home — mic button with today's brief card
+2. Listening — the voice overlay
+3. Result — a capture sorted into a list
+4. Lists — a few items across categories
+5. Drafts — a drafted message ready to send

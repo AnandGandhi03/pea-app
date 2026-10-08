@@ -1,0 +1,8 @@
+# The Vercel deployment only serves api/ and public/ — keep the app source out.
+src
+assets
+App.tsx
+app.json
+eas.json
+node_modules
+*.md

@@ -17,12 +17,8 @@
       "bundleIdentifier": "com.aifysolutions.pea",
       "buildNumber": "1",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Pea uses your microphone to capture voice notes hands-free.",
-        "NSSpeechRecognitionUsageDescription": "Pea uses speech recognition to transcribe your voice captures.",
-        "UIBackgroundModes": [
-          "fetch",
-          "remote-notification"
-        ]
+        "NSMicrophoneUsageDescription": "Pea uses the microphone to record short voice notes, which are transcribed into items on your lists.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -40,11 +36,18 @@
       ]
     },
     "plugins": [
+      "expo-font",
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Pea uses the microphone to record short voice notes, which are transcribed into items on your lists."
+        }
+      ],
       [
         "expo-notifications",
         {
           "icon": "./assets/icon.png",
-          "color": "#1C1917",
+          "color": "#4a7c59",
           "sounds": []
         }
       ]
