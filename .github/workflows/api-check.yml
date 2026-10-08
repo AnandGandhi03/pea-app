@@ -1,0 +1,61 @@
+name: API check
+
+# Manual smoke test of the deployed API. Run it from the Actions tab after a
+# deploy or a key change. It makes two small real calls to Anthropic (well
+# under a cent) and none to OpenAI.
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: Base URL of the deployment
+        default: https://pea-app-7cbm.vercel.app
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    env:
+      BASE: ${{ inputs.url }}
+      DEVICE: gh-actions-smoke-0001
+    steps:
+      - name: Privacy policy loads
+        run: |
+          code=$(curl -s -o /tmp/privacy.html -w '%{http_code}' "$BASE/privacy")
+          echo "GET /privacy -> $code"
+          test "$code" = 200
+          grep -q 'Privacy Policy' /tmp/privacy.html
+
+      - name: Requests without a device ID are rejected
+        run: |
+          code=$(curl -s -o /tmp/out.json -w '%{http_code}' -X POST "$BASE/api/classify" \
+            -H 'Content-Type: application/json' -d '{"text":"buy milk"}')
+          echo "POST /api/classify (no device) -> $code $(cat /tmp/out.json)"
+          test "$code" = 400
+
+      - name: Classification works (Anthropic key)
+        run: |
+          code=$(curl -s -o /tmp/out.json -w '%{http_code}' -X POST "$BASE/api/classify" \
+            -H 'Content-Type: application/json' -H "x-pea-device: $DEVICE" \
+            -d '{"text":"ring the daycare about friday pickup"}')
+          echo "POST /api/classify -> $code $(cat /tmp/out.json)"
+          test "$code" = 200
+          jq -e '.category and .cleaned' /tmp/out.json > /dev/null
+
+      - name: Drafting works
+        run: |
+          code=$(curl -s -o /tmp/out.json -w '%{http_code}' -X POST "$BASE/api/classify" \
+            -H 'Content-Type: application/json' -H "x-pea-device: $DEVICE" \
+            -d '{"text":"follow up with daycare about friday pickup","mode":"draft"}')
+          echo "POST /api/classify (draft) -> $code $(cat /tmp/out.json)"
+          test "$code" = 200
+          jq -e '.draft' /tmp/out.json > /dev/null
+
+      - name: Transcription endpoint is deployed and validates input
+        run: |
+          code=$(curl -s -o /tmp/out.json -w '%{http_code}' -X POST "$BASE/api/transcribe" \
+            -H 'Content-Type: application/json' -H "x-pea-device: $DEVICE" -d '{}')
+          echo "POST /api/transcribe (empty) -> $code $(cat /tmp/out.json)"
+          test "$code" = 400
