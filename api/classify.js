@@ -40,12 +40,17 @@ async function askClaude(system, userContent) {
     }),
   });
   if (!response.ok) {
-    console.error('Anthropic error:', response.status, await response.text());
-    return null;
+    const body = await response.text();
+    console.error('Anthropic error:', response.status, body);
+    // Surface only the status and error class (never the message or key) so a
+    // failing deployment can be diagnosed without digging through logs.
+    let type = 'unknown';
+    try { type = JSON.parse(body)?.error?.type || type; } catch {}
+    return { upstream: { status: response.status, type } };
   }
   const data = await response.json();
   const text = data?.content?.[0]?.text;
-  return typeof text === 'string' ? text.trim() : null;
+  return { text: typeof text === 'string' ? text.trim() : '' };
 }
 
 module.exports = async function handler(req, res) {
@@ -63,15 +68,15 @@ module.exports = async function handler(req, res) {
 
   try {
     if (kind === 'draft') {
-      const draft = await askClaude(DRAFT_SYSTEM, `Draft a message for: "${text}"`);
-      if (!draft) return res.status(502).json({ error: 'Draft generation failed' });
-      return res.status(200).json({ draft });
+      const reply = await askClaude(DRAFT_SYSTEM, `Draft a message for: "${text}"`);
+      if (!reply.text) return res.status(502).json({ error: 'Draft generation failed', upstream: reply.upstream });
+      return res.status(200).json({ draft: reply.text });
     }
 
-    const raw = await askClaude(CLASSIFY_SYSTEM, `Parent note: "${text}"`);
-    if (!raw) return res.status(502).json({ error: 'Classification failed' });
+    const reply = await askClaude(CLASSIFY_SYSTEM, `Parent note: "${text}"`);
+    if (!reply.text) return res.status(502).json({ error: 'Classification failed', upstream: reply.upstream });
 
-    const parsed = JSON.parse(raw.replace(/```json|```/g, '').trim());
+    const parsed = JSON.parse(reply.text.replace(/```json|```/g, '').trim());
     if (!CATEGORIES.includes(parsed?.category) || typeof parsed?.cleaned !== 'string' || !parsed.cleaned.trim()) {
       return res.status(502).json({ error: 'Classification failed' });
     }
