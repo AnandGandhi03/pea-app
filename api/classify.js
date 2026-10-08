@@ -46,7 +46,9 @@ async function askClaude(system, userContent) {
     // failing deployment can be diagnosed without digging through logs.
     let type = 'unknown';
     try { type = JSON.parse(body)?.error?.type || type; } catch {}
-    return { upstream: { status: response.status, type } };
+    // A 400 is either an empty account balance or a malformed request; say which.
+    const reason = /credit balance/i.test(body) ? 'billing' : undefined;
+    return { upstream: { status: response.status, type, reason } };
   }
   const data = await response.json();
   const text = data?.content?.[0]?.text;
