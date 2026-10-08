@@ -24,38 +24,42 @@ jobs:
       - name: Privacy policy loads
         run: |
           code=$(curl -s -o /tmp/privacy.html -w '%{http_code}' "$BASE/privacy")
-          echo "GET /privacy -> $code"
+          echo "::notice title=Privacy page::GET /privacy -> $code"
           test "$code" = 200
           grep -q 'Privacy Policy' /tmp/privacy.html
 
       - name: Requests without a device ID are rejected
+        if: always()
         run: |
           code=$(curl -s -o /tmp/out.json -w '%{http_code}' -X POST "$BASE/api/classify" \
             -H 'Content-Type: application/json' -d '{"text":"buy milk"}')
-          echo "POST /api/classify (no device) -> $code $(cat /tmp/out.json)"
+          echo "::notice title=Device guard::POST /api/classify (no device) -> $code $(cat /tmp/out.json)"
           test "$code" = 400
 
       - name: Classification works (Anthropic key)
+        if: always()
         run: |
           code=$(curl -s -o /tmp/out.json -w '%{http_code}' -X POST "$BASE/api/classify" \
             -H 'Content-Type: application/json' -H "x-pea-device: $DEVICE" \
             -d '{"text":"ring the daycare about friday pickup"}')
-          echo "POST /api/classify -> $code $(cat /tmp/out.json)"
+          echo "::notice title=Classification::POST /api/classify -> $code $(cat /tmp/out.json)"
           test "$code" = 200
           jq -e '.category and .cleaned' /tmp/out.json > /dev/null
 
       - name: Drafting works
+        if: always()
         run: |
           code=$(curl -s -o /tmp/out.json -w '%{http_code}' -X POST "$BASE/api/classify" \
             -H 'Content-Type: application/json' -H "x-pea-device: $DEVICE" \
             -d '{"text":"follow up with daycare about friday pickup","mode":"draft"}')
-          echo "POST /api/classify (draft) -> $code $(cat /tmp/out.json)"
+          echo "::notice title=Drafting::POST /api/classify (draft) -> $code $(cat /tmp/out.json)"
           test "$code" = 200
           jq -e '.draft' /tmp/out.json > /dev/null
 
       - name: Transcription endpoint is deployed and validates input
+        if: always()
         run: |
           code=$(curl -s -o /tmp/out.json -w '%{http_code}' -X POST "$BASE/api/transcribe" \
             -H 'Content-Type: application/json' -H "x-pea-device: $DEVICE" -d '{}')
-          echo "POST /api/transcribe (empty) -> $code $(cat /tmp/out.json)"
+          echo "::notice title=Transcription endpoint::POST /api/transcribe (empty) -> $code $(cat /tmp/out.json)"
           test "$code" = 400
