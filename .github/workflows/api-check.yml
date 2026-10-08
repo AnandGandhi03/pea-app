@@ -9,7 +9,7 @@ on:
     inputs:
       url:
         description: Base URL of the deployment
-        default: https://pea-app-7cbm.vercel.app
+        default: https://pea-app-psi.vercel.app
 
 permissions:
   contents: read
