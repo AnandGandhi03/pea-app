@@ -37,7 +37,7 @@ Productivity (secondary: Lifestyle)
 4+
 
 ## Privacy policy URL
-https://pea-app-7cbm.vercel.app/privacy
+https://pea-app-psi.vercel.app/privacy
 
 ## Support URL
 https://aify.solutions
