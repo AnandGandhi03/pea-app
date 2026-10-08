@@ -163,6 +163,17 @@ describe('classify handler', () => {
     expect(JSON.stringify(res.body)).not.toContain('sk-secret');
   });
 
+  it('flags an empty account balance as a billing problem', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      text: async () => JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', message: 'Your credit balance is too low to access the Anthropic API.' } }),
+    });
+    const res = mockRes();
+    await classify(mockReq({ text: 'something' }), res);
+    expect(res.body.upstream).toEqual({ status: 400, type: 'invalid_request_error', reason: 'billing' });
+  });
+
   it('validates input before calling the provider', async () => {
     for (const body of [{}, { text: '   ' }, { text: 'x'.repeat(1001) }]) {
       const res = mockRes();
