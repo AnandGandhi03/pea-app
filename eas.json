@@ -12,6 +12,9 @@
       "distribution": "internal",
       "ios": {
         "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_PEA_API_URL": "https://pea-app-7cbm.vercel.app"
       }
     },
     "production": {
@@ -22,6 +25,9 @@
       "android": {
         "buildType": "apk",
         "gradleCommand": ":app:assembleRelease"
+      },
+      "env": {
+        "EXPO_PUBLIC_PEA_API_URL": "https://pea-app-7cbm.vercel.app"
       }
     },
     "production-aab": {
